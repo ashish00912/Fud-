@@ -31,10 +31,11 @@ class APKObfuscator:
                 raise Exception(f"Failed to download apktool: {e}")
 
     def _get_apktool_cmd(self, action, *args):
-        # Try system apktool first, else use jar
         if shutil.which("apktool"):
             return ["apktool", action] + list(args)
         else:
+            if not shutil.which("java"):
+                raise Exception("❌ Java not found! Please install default-jre.")
             return ["java", "-jar", self.apktool_jar, action] + list(args)
 
     def decompile(self):
@@ -146,9 +147,8 @@ class APKObfuscator:
                 subprocess.run(cmd, shell=True, check=True)
                 shutil.move(f"{self.output_path}_signed.apk", self.output_path)
             else:
-                raise Exception("apksigner not found")
+                raise Exception("apksigner not found, using jarsigner")
         except Exception:
-            # Use jarsigner (always available with Java)
             cmd = (
                 f"jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 "
                 f"-keystore {self.keystore_path} -storepass android -keypass android "
