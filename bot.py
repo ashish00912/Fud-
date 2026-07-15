@@ -5,7 +5,7 @@ import random
 import string
 import logging
 from pyrogram import Client, filters
-from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+from pyrogram.types import Message
 from config import API_ID, API_HASH, BOT_TOKEN, ADMIN_IDS, MAX_FILE_SIZE, WORK_DIR, OUTPUT_DIR
 from obfuscator import APKObfuscator
 
