@@ -1,4 +1,2 @@
-apktool
-apksigner
 openjdk-17-jre-headless
 zipalign
