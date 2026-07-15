@@ -5,19 +5,47 @@ import random
 import string
 import tempfile
 import re
+import urllib.request
+import stat
 
 class APKObfuscator:
+    APKTOOL_URL = "https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_2.9.3.jar"
+    
     def __init__(self, input_path, output_path):
         self.input_path = input_path
         self.output_path = output_path
         self.work_dir = tempfile.mkdtemp(prefix="apk_obf_")
         self.decompiled_dir = os.path.join(self.work_dir, "decompiled")
         self.keystore_path = os.path.join(self.work_dir, "test.keystore")
+        self.apktool_jar = os.path.join(self.work_dir, "apktool.jar")
+        self._ensure_apktool()
+
+    def _ensure_apktool(self):
+        """Download apktool.jar if not already present."""
+        if not os.path.exists(self.apktool_jar):
+            print("📥 Downloading apktool.jar...")
+            try:
+                urllib.request.urlretrieve(self.APKTOOL_URL, self.apktool_jar)
+                # Make executable (not needed for jar but fine)
+                os.chmod(self.apktool_jar, os.stat(self.apktool_jar).st_mode | stat.S_IEXEC)
+                print("✅ apktool.jar downloaded.")
+            except Exception as e:
+                raise Exception(f"Failed to download apktool: {e}")
+
+    def _get_apktool_cmd(self, action, *args):
+        """Return the command to run apktool (either system or jar)."""
+        # Try system apktool first
+        if shutil.which("apktool"):
+            cmd = ["apktool", action] + list(args)
+        else:
+            # Use java -jar
+            cmd = ["java", "-jar", self.apktool_jar, action] + list(args)
+        return cmd
 
     def decompile(self):
         os.makedirs(self.decompiled_dir, exist_ok=True)
-        cmd = f"apktool d {self.input_path} -o {self.decompiled_dir} -f"
-        subprocess.run(cmd, shell=True, check=True)
+        cmd = self._get_apktool_cmd("d", self.input_path, "-o", self.decompiled_dir, "-f")
+        subprocess.run(cmd, check=True)
         return self.decompiled_dir
 
     def obfuscate_smali(self):
@@ -98,8 +126,8 @@ class APKObfuscator:
         return None
 
     def rebuild(self):
-        cmd = f"apktool b {self.decompiled_dir} -o {self.output_path} -f"
-        subprocess.run(cmd, shell=True, check=True)
+        cmd = self._get_apktool_cmd("b", self.decompiled_dir, "-o", self.output_path, "-f")
+        subprocess.run(cmd, check=True)
 
     def _ensure_keystore(self):
         if not os.path.exists(self.keystore_path):
@@ -114,23 +142,30 @@ class APKObfuscator:
     def sign_apk(self):
         self._ensure_keystore()
         try:
-            cmd = (
-                f"apksigner sign --ks {self.keystore_path} "
-                f"--ks-pass pass:android --key-pass pass:android "
-                f"--out {self.output_path}_signed.apk {self.output_path}"
-            )
-            subprocess.run(cmd, shell=True, check=True)
-            shutil.move(f"{self.output_path}_signed.apk", self.output_path)
+            # Try apksigner if available
+            if shutil.which("apksigner"):
+                cmd = (
+                    f"apksigner sign --ks {self.keystore_path} "
+                    f"--ks-pass pass:android --key-pass pass:android "
+                    f"--out {self.output_path}_signed.apk {self.output_path}"
+                )
+                subprocess.run(cmd, shell=True, check=True)
+                shutil.move(f"{self.output_path}_signed.apk", self.output_path)
+            else:
+                raise Exception("apksigner not found")
         except Exception:
+            # Fallback to jarsigner (always available with Java)
             cmd = (
                 f"jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 "
                 f"-keystore {self.keystore_path} -storepass android -keypass android "
                 f"{self.output_path} test"
             )
             subprocess.run(cmd, shell=True, check=True)
-            cmd = f"zipalign -v -p 4 {self.output_path} {self.output_path}_aligned.apk"
-            subprocess.run(cmd, shell=True, check=True)
-            shutil.move(f"{self.output_path}_aligned.apk", self.output_path)
+            # zipalign optional, but try if available
+            if shutil.which("zipalign"):
+                cmd = f"zipalign -v -p 4 {self.output_path} {self.output_path}_aligned.apk"
+                subprocess.run(cmd, shell=True, check=True)
+                shutil.move(f"{self.output_path}_aligned.apk", self.output_path)
 
     def run(self):
         self.decompile()
