@@ -1,0 +1,4 @@
+pyrogram==2.0.106
+androguard==3.4.0a1
+pyaxmlparser==0.3.30
+click==8.1.7

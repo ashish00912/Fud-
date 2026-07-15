@@ -1,0 +1,6 @@
+{
+  "build": {
+    "packages": ["apktool", "apksigner", "openjdk-17-jre-headless", "zipalign"],
+    "builder": "NIXPACKS"
+  }
+}
